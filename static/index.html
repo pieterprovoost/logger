@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html ng-app="app">
+<head>
+<link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap.min.css" />
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/nvd3/1.8.2/nv.d3.min.css" />
+<style>
+#chart {
+	width: 500px;
+	height: 300px;
+	background-color: #eeeeee;
+}
+</style>
+</head>
+<body ng-controller="serialcontroller">
+
+<div class="container">
+	<h2>Arduino LM35</h2>
+	<p><select name="port" ng-model="port" ng-change="connect(port)">
+		<option value="">(select port)</option>
+		<option ng-repeat="port in ports">{{ port.comName }}</option>
+	</select></p>
+	<div id="chart">
+		<svg></svg>
+	</div>
+</div>
+
+</body>
+<script src="https://ajax.googleapis.com/ajax/libs/angularjs/1.4.9/angular.min.js"></script>
+<script src="https://cdn.rawgit.com/gdi2290/angular-websocket/v1.0.9/angular-websocket.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/3.5.16/d3.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/nvd3/1.8.2/nv.d3.min.js"></script>
+<script>
+
+var app = angular.module("app", [ "ngWebSocket" ]);
+
+app.controller("serialcontroller", function($scope, $http, $websocket) {
+
+	var chart = nv.models.lineChart()
+		.margin({ left: 100 })
+		.showLegend(false)
+		.showXAxis(true)
+		.showYAxis(true);
+
+	chart.xAxis
+		.axisLabel("Time")
+		.tickFormat(
+			function(d) {
+				return d3.time.format("%M:%S")(new Date(d))
+			}
+		);
+
+	chart.yAxis
+		.axisLabel("Temperature (°C)")
+		.tickFormat(d3.format(".2f"));
+
+	var render = function(data) {
+		d3.select("#chart svg")
+			.datum(data)
+			.call(chart);
+	};
+
+	$scope.data = [{
+		key: "data",
+		values: [],
+		color: "#000000"
+	}];
+
+	$http({
+		method: "GET",
+		url: "../ports"
+	}).then(function(response) {
+		$scope.ports = response.data;
+	});
+
+	$scope.connect = function(port) {
+		var url = "ws://127.0.0.1:8081" + port;
+		var stream = $websocket(url);
+		stream.onMessage(function(message) {
+			if ($scope.data[0].values.length > 500) {
+				$scope.data[0].values.shift();
+			}
+			$scope.data[0].values.push({
+				x: new Date(),
+				y: JSON.parse(message.data)
+			});
+			render($scope.data);
+		});
+	};
+
+});
+
+</script>
+</html>
